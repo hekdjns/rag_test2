@@ -90,7 +90,7 @@ def main():
     for msg in st.session_state.messages:
         st.chat_message(msg.role).write(msg.content)
 
-    llm = RemoteRunnable("https://ragtest.ngrok.app/llm/")  # LangServe 모델 API
+    llm = RemoteRunnable("https://germinable-bari-glyphic.ngrok-free.dev/llm/")  # LangServe 모델 API
 
     # Chat input
     user_input = st.chat_input("질문을 입력하세요")
@@ -150,3 +150,4 @@ Answer:
 
 if __name__ == "__main__":
     main()
+
