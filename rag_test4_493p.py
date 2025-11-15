@@ -1,177 +1,152 @@
 import streamlit as st
-import tiktoken
 from loguru import logger
 
 from langchain_core.messages import ChatMessage
-
-from langchain.document_loaders import PyPDFLoader
-from langchain.document_loaders import Docx2txtLoader
-from langchain.document_loaders import UnstructuredPowerPointLoader
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain_core.output_parsers import StrOutputParser
-
-from langchain.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-from langserve import RemoteRunnable
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RemoteRunnable, RunnablePassthrough
 
-def tiktoken_len(text):
-    tokenizer = tiktoken.get_encoding("cl100k_base")
-    tokens = tokenizer.encode(text)
-    return len(tokens)
+
+# tiktoken 제거 → Cloud 호환
+def length_function(text):
+    return len(text)
+
 
 def get_text(docs):
-
     doc_list = []
-    
     for doc in docs:
-        file_name = doc.name  # doc 객체의 이름을 파일 이름으로 사용
-        with open(file_name, "wb") as file:  # 파일을 doc.name으로 저장
-            file.write(doc.getvalue())
-            logger.info(f"Uploaded {file_name}")
-        if '.pdf' in doc.name:
-            loader = PyPDFLoader(file_name)
-            documents = loader.load_and_split()
-        elif '.docx' in doc.name:
-            loader = Docx2txtLoader(file_name)
-            documents = loader.load_and_split()
-        elif '.pptx' in doc.name:
-            loader = UnstructuredPowerPointLoader(file_name)
-            documents = loader.load_and_split()
+        file_name = doc.name
+        with open(file_name, "wb") as f:
+            f.write(doc.getvalue())
 
-        doc_list.extend(documents)
+        if file_name.lower().endswith(".pdf"):
+            loader = PyPDFLoader(file_name)
+        elif file_name.lower().endswith(".docx"):
+            loader = Docx2txtLoader(file_name)
+        else:
+            continue
+
+        doc_list.extend(loader.load_and_split())
+
     return doc_list
 
+
 def get_text_chunks(text):
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=900,
-        chunk_overlap=100,
-        length_function=tiktoken_len
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=900, chunk_overlap=100, length_function=length_function
     )
-    chunks = text_splitter.split_documents(text)
-    return chunks
+    return splitter.split_documents(text)
+
 
 def get_vectorstore(text_chunks):
     embeddings = HuggingFaceEmbeddings(
-                                        model_name="jhgan/ko-sroberta-multitask",
-                                        model_kwargs={'device': 'cpu'},
-                                        encode_kwargs={'normalize_embeddings': True}
-                                        )  
-    vectordb = FAISS.from_documents(text_chunks, embeddings)
+        model_name="jhgan/ko-sroberta-multitask",
+        model_kwargs={"device": "cpu"},
+        encode_kwargs={"normalize_embeddings": True},
+    )
+    return FAISS.from_documents(text_chunks, embeddings)
 
-    return vectordb
+
+def format_docs(docs):
+    return "\n\n".join(doc.page_content for doc in docs)
+
 
 def main():
-    
-    global retriever
-    
-    st.set_page_config(
-    page_title="Streamlit_remote_RAG",
-    page_icon=":books:")
 
-    st.title("_RAG_test4 :red[Q/A Chat]_ :books:")
+    st.set_page_config(page_title="Hybrid RAG Chatbot", page_icon="🤖")
+    st.title("🤖 **하이브리드 RAG + LLM 챗봇**")
 
+    # Session state
     if "messages" not in st.session_state:
-       st.session_state["messages"] = []
-       
-   #채팅 대화기록을 점검
-    if "store" not in st.session_state:
-       st.session_state["store"] =dict()
-
-               
-    def print_history():
-        for msg in st.session_state.messages:
-            st.chat_message(msg.role).write(msg.content)
-               
-    def add_history(role, content):
-        st.session_state.messages.append(ChatMessage(role=role, content=content))
+        st.session_state.messages = []
 
     if "processComplete" not in st.session_state:
-        st.session_state.processComplete = None
-    
+        st.session_state.processComplete = False
+
     if "retriever" not in st.session_state:
         st.session_state.retriever = None
 
+    # Sidebar Upload
     with st.sidebar:
-        uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx'],accept_multiple_files=True)
-        process = st.button("Process")
-        
-    if process:
-       
-        files_text = get_text(uploaded_files)
-        text_chunks = get_text_chunks(files_text)
-        vectorstore = get_vectorstore(text_chunks)
-        retriever = vectorstore.as_retriever(search_type = 'mmr', vervose = True)
-        st.session_state['retriever'] =retriever
+        uploaded = st.file_uploader(
+            "파일 업로드 (PDF, DOCX)", type=["pdf", "docx"], accept_multiple_files=True
+        )
+        process = st.button("📄 문서 처리")
 
+    if process and uploaded:
+        docs = get_text(uploaded)
+        chunks = get_text_chunks(docs)
+        vectordb = get_vectorstore(chunks)
+        st.session_state.retriever = vectordb.as_retriever(search_type="mmr")
         st.session_state.processComplete = True
+        st.success("문서 기반 RAG 준비 완료!")
 
-    if 'messages' not in st.session_state:
-        st.session_state['messages'] = [{"role": "assistant", 
-                                        "content": "안녕하세요! 주어진 문서에 대해 궁금하신 것이 있으면 언제든 물어봐주세요!"}]
-    
-    def format_docs(docs):
-    # 검색한 문서 결과를 하나의 문단으로 합쳐줍니다.
-        return "\n\n".join(doc.page_content for doc in docs)
-    
-    RAG_PROMPT_TEMPLATE = """당신은 동서울대학교 컴퓨터소프트웨어과 안내 AI 입니다. 
-                             검색된 문맥을 사용하여 질문에 맞는 답변을 30문자 이내로 하세요. 
-                             답을 모른다면 모른다고 답변하세요.
-                            Question: {question} 
-                            Context: {context} 
-                            Answer:"""  
-    
-    print_history()
-    
-    if user_input := st.chat_input("메세지를 입력해 주세요"):
-        #사용자가 입력한 내용
-        add_history("user", user_input)
-        st.chat_message("user").write(f"{user_input}") 
-        with st.chat_message("assistant"):    
-            
-            llm = RemoteRunnable("https://ragtest.ngrok.app/llm/")
-            chat_container = st.empty()
-            
-            if  st.session_state.processComplete==True:
-                prompt1 = ChatPromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
+    # Chat history print
+    for msg in st.session_state.messages:
+        st.chat_message(msg.role).write(msg.content)
 
-                retriever = st.session_state['retriever']
-               # 체인을 생성합니다.
-                rag_chain = (
-                   {
-                       "context": retriever | format_docs,
-                       "question": RunnablePassthrough(),
-                   }
-                   | prompt1
-                   | llm
-                   | StrOutputParser()
+    llm = RemoteRunnable("https://ragtest.ngrok.app/llm/")  # LangServe 모델 API
+
+    # Chat input
+    user_input = st.chat_input("질문을 입력하세요")
+
+    if user_input:
+        st.session_state.messages.append(ChatMessage(role="user", content=user_input))
+        st.chat_message("user").write(user_input)
+
+        with st.chat_message("assistant"):
+            container = st.empty()
+
+            # RAG 모드
+            if st.session_state.processComplete:
+                prompt = ChatPromptTemplate.from_template(
+                    """당신은 회사 문서 기반 RAG 챗봇입니다.
+검색된 문맥을 사용해 답변하세요.
+Question: {question}
+Context: {context}
+Answer:
+"""
                 )
-              
-                answer = rag_chain.stream(user_input)  
-                chunks = []
-                for chunk in answer:
-                   chunks.append(chunk)
-                   chat_container.markdown("".join(chunks))
-                add_history("ai", "".join(chunks))
-                
+
+                retriever = st.session_state.retriever
+
+                chain = (
+                    {
+                        "context": retriever | format_docs,
+                        "question": RunnablePassthrough(),
+                    }
+                    | prompt
+                    | llm
+                    | StrOutputParser()
+                )
+
+            # LLM 기본 모드
             else:
-                prompt2 = ChatPromptTemplate.from_template(
-                    "다음의 질문에 간결하게 답변해 주세요:\n{input}"
+                prompt = ChatPromptTemplate.from_template(
+                    """당신은 회사 안내 AI 챗봇입니다.
+이전 질문도 참고하여 답변하세요.
+Question: {input}
+Answer:
+"""
                 )
 
-                # 체인을 생성합니다.
-                chain = prompt2 | llm | StrOutputParser()
+                chain = prompt | llm | StrOutputParser()
 
-                answer = chain.stream(user_input)  # 문서에 대한 질의
-                chunks = []
-                for chunk in answer:
-                   chunks.append(chunk)
-                   chat_container.markdown("".join(chunks))
-                add_history("ai", "".join(chunks))
-          
-if __name__ == '__main__':
+            answer_chunks = []
+            for chunk in chain.stream(user_input):
+                answer_chunks.append(chunk)
+                container.markdown("".join(answer_chunks))
+
+            final_answer = "".join(answer_chunks)
+            st.session_state.messages.append(
+                ChatMessage(role="assistant", content=final_answer)
+            )
+
+
+if __name__ == "__main__":
     main()
-    
-    
