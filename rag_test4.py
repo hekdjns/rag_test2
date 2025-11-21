@@ -145,7 +145,7 @@ def main():
         st.chat_message("user").write(f"{user_input}") 
         with st.chat_message("assistant"):    
             
-            llm = RemoteRunnable("https://germinable-bari-glyphic.ngrok-free.dev/llm/")
+            llm = RemoteRunnable("https://ragtest.ngrok.app/llm/")
             chat_container = st.empty()
             
             if  st.session_state.processComplete==True:
