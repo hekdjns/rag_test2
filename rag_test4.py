@@ -131,17 +131,15 @@ def main():
         return "\n\n".join(doc.page_content for doc in docs)
     
     RAG_PROMPT_TEMPLATE = """
-                            <|im_start|>system
-                            당신은 동서울대학교 컴퓨터소프트웨어과 안내 AI 입니다.
-                            검색된 문맥을 사용하여 질문에 맞는 답변을 30문자 이내로 하세요.
-                            답을 모른다면 '모르겠습니다'라고 답하세요.
-                            <|im_end|>
                             <|im_start|>user
+                            문맥(context)을 참고하여 사용자 질문에 답변하세요.
+                            
                             Question: {question}
                             Context: {context}
+                            
                             <|im_end|>
                             <|im_start|>assistant
-                            Answer:"""  
+                            """
     
     print_history()
     
@@ -181,7 +179,7 @@ def main():
                 
             else:
                 prompt2 = ChatPromptTemplate.from_template(
-                    "다음의 질문에 간결하게 답변해 주세요:\n{input}"
+                    "<|im_start|>user\n{input}\n<|im_end|>\n<|im_start|>assistant"
                 )
 
                 # 체인을 생성합니다.
