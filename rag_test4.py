@@ -136,9 +136,7 @@ def main():
                             
                             Question: {question}
                             Context: {context}
-                            
                             <|im_end|>
-                            <|im_start|>assistant
                             """
     
     print_history()
@@ -179,7 +177,7 @@ def main():
                 
             else:
                 prompt2 = ChatPromptTemplate.from_template(
-                    "<|im_start|>user\n{input}\n<|im_end|>\n<|im_start|>assistant"
+                    "<|im_start|>user\n{input}\n<|im_end|>"
                 )
 
                 # 체인을 생성합니다.
