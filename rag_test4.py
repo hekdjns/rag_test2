@@ -14,7 +14,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langserve import RemoteChatRunnable
+from langserve import RemoteRunnable
 
 def tiktoken_len(text):
     tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -131,10 +131,16 @@ def main():
         return "\n\n".join(doc.page_content for doc in docs)
     
     RAG_PROMPT_TEMPLATE = """
-                            Answer the user's question using ONLY the provided context.
-                            If the answer is not in the context, say "모르겠습니다."
+                            <|im_start|>system
+                            당신은 동서울대학교 컴퓨터소프트웨어과 안내 AI 입니다.
+                            검색된 문맥을 사용하여 질문에 맞는 답변을 30문자 이내로 하세요.
+                            답을 모른다면 '모르겠습니다'라고 답하세요.
+                            <|im_end|>
+                            <|im_start|>user
                             Question: {question}
                             Context: {context}
+                            <|im_end|>
+                            <|im_start|>assistant
                             Answer:"""  
     
     print_history()
@@ -145,7 +151,7 @@ def main():
         st.chat_message("user").write(f"{user_input}") 
         with st.chat_message("assistant"):    
             
-            llm = RemoteChatRunnable("https://ragtest.ngrok.app/llm/")
+            llm = RemoteRunnable("https://ragtest.ngrok.app/llm/")
             chat_container = st.empty()
             
             if  st.session_state.processComplete==True:
@@ -174,7 +180,9 @@ def main():
                 add_history("ai", "".join(chunks))
                 
             else:
-                prompt2 = ChatPromptTemplate.from_template("{input}")
+                prompt2 = ChatPromptTemplate.from_template(
+                    "다음의 질문에 간결하게 답변해 주세요:\n{input}"
+                )
 
                 # 체인을 생성합니다.
                 chain = prompt2 | llm
