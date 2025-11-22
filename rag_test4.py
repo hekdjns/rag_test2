@@ -130,11 +130,11 @@ def main():
     # 검색한 문서 결과를 하나의 문단으로 합쳐줍니다.
         return "\n\n".join(doc.page_content for doc in docs)
     
-    RAG_PROMPT_TEMPLATE = """당신은 동서울대학교 컴퓨터소프트웨어과 안내 AI 입니다. 
-                             검색된 문맥을 사용하여 질문에 맞는 답변을 30문자 이내로 하세요. 
-                             답을 모른다면 모른다고 답변하세요.
-                            Question: {question} 
-                            Context: {context} 
+    RAG_PROMPT_TEMPLATE = """
+                            Answer the user's question using ONLY the provided context.
+                            If the answer is not in the context, say "모르겠습니다."
+                            Question: {question}
+                            Context: {context}
                             Answer:"""  
     
     print_history()
@@ -174,9 +174,7 @@ def main():
                 add_history("ai", "".join(chunks))
                 
             else:
-                prompt2 = ChatPromptTemplate.from_template(
-                    "다음의 질문에 간결하게 답변해 주세요:\n{input}"
-                )
+                prompt2 = ChatPromptTemplate.from_template("{input}")
 
                 # 체인을 생성합니다.
                 chain = prompt2 | llm
