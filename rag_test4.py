@@ -14,7 +14,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langserve import RemoteRunnable
+from langserve import RemoteChatRunnable
 
 def tiktoken_len(text):
     tokenizer = tiktoken.get_encoding("cl100k_base")
@@ -145,7 +145,7 @@ def main():
         st.chat_message("user").write(f"{user_input}") 
         with st.chat_message("assistant"):    
             
-            llm = RemoteRunnable("https://ragtest.ngrok.app/llm/")
+            llm = RemoteChatRunnable("https://ragtest.ngrok.app/llm/")
             chat_container = st.empty()
             
             if  st.session_state.processComplete==True:
