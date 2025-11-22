@@ -85,7 +85,7 @@ def main():
     page_title="Streamlit_remote_RAG",
     page_icon=":books:")
 
-    st.title("_RAG_test4 :red[Q/A Chat]_ :books:")
+    st.title("_AirCUVE :red[Q/A Chat]_ :books:")
 
     if "messages" not in st.session_state:
        st.session_state["messages"] = []
