@@ -20,6 +20,9 @@ unstructured==0.15.0
 
 langserve==0.0.41
 
+fastapi==0.110.0
+uvicorn==0.29.0
+
 datasets==2.14.6
 accelerate==0.27.2
 peft==0.7.1
